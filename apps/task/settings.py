@@ -20,7 +20,7 @@ CELERY_TIMEZONE = 'Asia/Shanghai'
 CELERYBEAT_SCHEDULE = {
     'add-every-30-seconds': {
         'task': 'apps.task.tasks.echo',
-        'schedule': timedelta(seconds=5),
+        'schedule': timedelta(seconds=30),
         'args': ('hello',)
     },
 }
