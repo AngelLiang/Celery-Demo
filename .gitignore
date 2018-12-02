@@ -110,5 +110,9 @@ venv.bak/
 .dmypy.json
 dmypy.json
 
-# IDE
+# my project
 .vscode
+*.bak
+*.dat
+*.dir
+*.pid
