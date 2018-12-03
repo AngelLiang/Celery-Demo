@@ -10,7 +10,24 @@ from kombu import Exchange, Queue
 CELERY_DEFAULT_QUEUE = 'celery-demo'
 CELERY_QUEUES = (
     Queue('celery-demo', Exchange('celery-demo'), routing_key='default'),
+    Queue('add', Exchange('celery-demo'), routing_key='default'),
+    Queue('echo', Exchange('celery-demo'), routing_key='default'),
 )
+
+# 配置路由
+CELERY_ROUTES = (
+    {
+        'apps.task.tasks.add': {
+            'queue': 'add',
+            # 'routing_key': 'task-one'
+        },
+        'apps.task.tasks.echo': {
+            'queue': 'echo',
+            # 'routing_key': 'task-two'
+        }
+    },
+)
+
 
 # 配置时区
 CELERY_TIMEZONE = 'Asia/Shanghai'
@@ -31,14 +48,13 @@ CELERYBEAT_SCHEDULE = {
 # CELERY_RESULT_BACKEND='redis://localhost:6379'
 
 # RabbitMQ
-CELERY_BROKER_URL = os.getenv(
-    'CELERY_BROKER_URL') or 'amqp://guest:guest@localhost:5672//'
-CELERY_RESULT_BACKEND = os.getenv(
-    'CELERY_RESULT_BACKEND') or 'amqp://guest:guest@localhost:5672//'
+CELERY_BROKER_URL = 'amqp://guest:guest@localhost:5672//'
+CELERY_RESULT_BACKEND = 'amqp://guest:guest@localhost:5672//'
 
 config_dict = dict(
     CELERY_DEFAULT_QUEUE=CELERY_DEFAULT_QUEUE,
     CELERY_QUEUES=CELERY_QUEUES,
+    CELERY_ROUTES=CELERY_ROUTES,
 
     CELERY_TIMEZONE=CELERY_TIMEZONE,
     CELERYBEAT_SCHEDULE=CELERYBEAT_SCHEDULE,
