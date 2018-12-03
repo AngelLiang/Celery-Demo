@@ -10,8 +10,9 @@ from kombu import Exchange, Queue
 CELERY_DEFAULT_QUEUE = 'celery-demo'
 CELERY_QUEUES = (
     Queue('celery-demo', Exchange('celery-demo'), routing_key='default'),
-    Queue('add', Exchange('celery-demo'), routing_key='default'),
-    Queue('echo', Exchange('celery-demo'), routing_key='default'),
+    # delivery_mode=1，不写入磁盘；delivery_mode=2（默认），写入磁盘
+    Queue('add', Exchange('celery-demo'), routing_key='default', delivery_mode=1),
+    Queue('echo', Exchange('celery-demo'), routing_key='default', delivery_mode=1),
 )
 
 # 配置路由
