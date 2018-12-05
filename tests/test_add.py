@@ -1,6 +1,14 @@
 # coding=utf-8
 
+from pytest import raises
+from unittest.mock import patch
+
 from apps.task.tasks import add
 
+
+def test_add_task():
+    assert add.delay(4, 4).get(timeout=10) == 8
+
+
 if __name__ == "__main__":
-    add.delay(1, 2)
+    test_add_task()

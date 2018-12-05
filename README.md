@@ -35,7 +35,7 @@ $ $env:FORKED_BY_MULTIPROCESSING
 # set FORKED_BY_MULTIPROCESSING=1
 ````
 
-也可以在主目录下创建`.env`文件，写入`FORKED_BY_MULTIPROCESSING = 1`，当`pipenv shell`进入虚拟环境命令行的时候就会自动加载该变量。
+也可以在主目录下创建`.env`文件，写入`FORKED_BY_MULTIPROCESSING = 1`并安装`python-dotenv`，当`pipenv shell`进入虚拟环境命令行的时候就会自动加载该变量。
 
 最后启动 celery：
 
