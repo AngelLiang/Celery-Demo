@@ -4,7 +4,7 @@
 Run:
 
 ```
-$ celery worker -A task_app.celery --loglevel=info
+$ celery worker -A task_app.celery -l info
 ```
 
 Usage:

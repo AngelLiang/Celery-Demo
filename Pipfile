@@ -4,7 +4,9 @@ verify_ssl = true
 name = "pypi"
 
 [packages]
-celery = "==3.1.25"
+celery = "*"
+python-dotenv = "*"
+pika = "*"
 
 [dev-packages]
 flake8 = "*"
