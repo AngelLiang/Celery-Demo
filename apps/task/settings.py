@@ -20,21 +20,21 @@ CELERY_QUEUES = (
     Queue('celery-demo', default_exchange, routing_key='default', auto_delete=True, durable=True),
     Broadcast('broadcast_tasks', exchange=broadcast_exchange),
 
-    Queue('task1', broadcast_exchange),
+    # 广播的时候似乎无法触发task1
+    # Queue('task1', broadcast_exchange),
     # Queue('task2', default_exchange, routing_key='task2'),
 )
 
 # 配置路由
-CELERY_ROUTES = (
-    {
-        'apps.task.tasks.broadcast_task': {
-            'queue': 'broadcast_tasks'
-        },
-        'apps.task.tasks.task1': {
-            'queue': 'task1',
-        },
-    }
-)
+CELERY_ROUTES = {
+    'broadcast_task': {
+        'queue': 'broadcast_tasks'
+    },
+    'task1': {
+        'queue': 'task1',
+    },
+}
+
 
 # 配置时区
 CELERY_TIMEZONE = 'Asia/Shanghai'
