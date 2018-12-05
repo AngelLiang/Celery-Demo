@@ -1,32 +1,36 @@
 # coding=utf-8
 
-import os
+# import os
 from datetime import timedelta
 
 
 from kombu import Exchange, Queue
 
-# 修改默认队列名称
+# 默认队列配置
 CELERY_DEFAULT_QUEUE = 'celery-demo'
+CELERY_DEFAULT_EXCHANGE = 'celery-demo'
+CELERY_DEFAULT_ROUTING_KEY = 'celery-demo'
+
 CELERY_QUEUES = (
-    Queue('celery-demo', Exchange('celery-demo'), routing_key='default'),
     # delivery_mode=1，不写入磁盘；delivery_mode=2（默认），写入磁盘
-    Queue('add', Exchange('celery-demo'), routing_key='default', delivery_mode=1),
-    Queue('echo', Exchange('celery-demo'), routing_key='default', delivery_mode=1),
+    Queue('celery-demo', Exchange('celery-demo'), routing_key='default'),
+    # 添加以下队列好像会重复触发
+    # Queue('add', Exchange('celery-demo'), routing_key='add', delivery_mode=1),
+    # Queue('echo', Exchange('celery-demo'), routing_key='echo', delivery_mode=1),
 )
 
 # 配置路由
 CELERY_ROUTES = (
-    {
-        'apps.task.tasks.add': {
-            'queue': 'add',
-            # 'routing_key': 'task-one'
-        },
-        'apps.task.tasks.echo': {
-            'queue': 'echo',
-            # 'routing_key': 'task-two'
-        }
-    },
+    # {
+    #     'add': {
+    #         'queue': 'add',
+    #         # 'routing_key': 'task-one'
+    #     },
+    #     'echo': {
+    #         'queue': 'echo',
+    #         # 'routing_key': 'task-two'
+    #     }
+    # },
 )
 
 
