@@ -112,7 +112,10 @@ dmypy.json
 
 # my project
 .vscode
+
 *.bak
 *.dat
 *.dir
 *.pid
+
+*.db

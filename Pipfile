@@ -7,6 +7,7 @@ name = "pypi"
 celery = "*"
 python-dotenv = "*"
 pika = "*"
+sqlalchemy = "*"
 
 [dev-packages]
 flake8 = "*"

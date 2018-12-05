@@ -1,10 +1,14 @@
 # coding=utf-8
 
-# import os
+import os
 from datetime import timedelta
 
 from kombu import Exchange, Queue
 from kombu.common import Broadcast
+
+BASEDIR = os.path.realpath(
+    os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
+)
 
 # 默认队列配置
 task_default_queue = 'celery-demo'
@@ -59,7 +63,13 @@ beat_schedule = {
 
 # RabbitMQ
 broker_url = 'amqp://guest:guest@localhost:5672//'
-result_backend = 'rpc://'
+# result_backend = 'rpc://'
+
+# Using the database to store task state and results.
+# First install sqlalchemy
+# pipenv install sqlalchemy
+result_backend = 'db+sqlite:///results.db'
+
 
 task_serializer = 'json'
 result_serializer = 'json'
