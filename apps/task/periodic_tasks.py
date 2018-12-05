@@ -12,6 +12,9 @@ from . import celery
 from .tasks import echo
 
 
+logger = get_task_logger(__name__)
+
+
 @celery.on_after_configure.connect
 def setup_periodic_tasks(sender, **kwargs):
     # Calls echo('hello') every 10 seconds.
@@ -25,9 +28,3 @@ def setup_periodic_tasks(sender, **kwargs):
         crontab(hour=7, minute=30, day_of_week=1),
         echo.s('Happy Mondays!'),
     )
-
-
-@celery.task(name='add-periodic-task')
-def add_periodic_task(second=3.0):
-    get_task_logger.info('add_periodic_task')
-    # celery.add_periodic_task(second, echo.s('hello'), name='hello every {}s'.format(second))
