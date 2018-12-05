@@ -14,7 +14,10 @@ task_default_routing_key = 'celery-demo'
 # delivery_mode: =1，message不写入磁盘；=2（默认）message会写入磁盘
 default_exchange = Exchange('celery-demo', delivery_mode=1)
 broadcast_exchange = Exchange(
-    'celery-demo-broadcast', type='fanout', delivery_mode=1)
+    'celery-demo-broadcast',
+    # type='fanout',
+    delivery_mode=1
+)
 
 tasks_queues = (
     # durable: Boolean，重启后是否激活
@@ -30,7 +33,8 @@ tasks_queues = (
 # 配置路由
 task_routes = {
     'broadcast_task': {
-        'queue': 'broadcast_tasks'
+        'queue': 'broadcast_tasks',
+        'exchange': 'broadcast_tasks'
     },
     'task1': {
         'queue': 'task1',
@@ -41,6 +45,7 @@ task_routes = {
 # 配置时区
 timezone = 'Asia/Shanghai'
 
+# ### Beat Settings
 # 定时任务的配置
 # 启动：celery -A task_app.celery beat -l info
 beat_schedule = {
