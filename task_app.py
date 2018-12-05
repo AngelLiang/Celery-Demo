@@ -18,8 +18,15 @@ $ python
 ```
 
 启动定期任务：
+
 ```
 $ celery -A task_app.celery beat -l info
+```
+
+查看任务激活的队列：
+
+```
+$ celery -A task_app.celery inspect active_queues
 ```
 
 """

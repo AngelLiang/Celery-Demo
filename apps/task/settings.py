@@ -3,8 +3,8 @@
 # import os
 from datetime import timedelta
 
-
 from kombu import Exchange, Queue
+from kombu.common import Broadcast
 
 # 默认队列配置
 CELERY_DEFAULT_QUEUE = 'celery-demo'
@@ -17,22 +17,27 @@ CELERY_QUEUES = (
     # 添加以下队列好像会重复触发
     # Queue('add', Exchange('celery-demo'), routing_key='add', delivery_mode=1),
     # Queue('echo', Exchange('celery-demo'), routing_key='echo', delivery_mode=1),
+    Broadcast('broadcast_tasks')
 )
 
 # 配置路由
 CELERY_ROUTES = (
     # {
-    #     'add': {
+    #     'apps.task.tasks.add': {
     #         'queue': 'add',
     #         # 'routing_key': 'task-one'
     #     },
-    #     'echo': {
+    #     'apps.task.tasks.echo': {
     #         'queue': 'echo',
     #         # 'routing_key': 'task-two'
     #     }
     # },
+    {
+        'apps.task.tasks.broadcast_task': {
+            'queue': 'broadcast_tasks'
+        }
+    }
 )
-
 
 # 配置时区
 CELERY_TIMEZONE = 'Asia/Shanghai'
