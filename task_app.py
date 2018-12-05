@@ -32,3 +32,6 @@ $ celery -A task_app.celery inspect active_queues
 """
 
 from apps.task import celery
+
+if __name__ == "__main__":
+    celery.start()

@@ -54,3 +54,10 @@ def task2():
 @celery.task(name='broadcast_task', ignore_result=True)
 def broadcast_task():
     logger.info('broadcast task')
+
+
+@celery.task(name='add-periodic-task')
+def add_periodic_task(second=3.0):
+    logger.info('add_periodic_task')
+    celery.add_periodic_task(second, echo.s(
+        'hello'), name='hello every {}s'.format(second))
