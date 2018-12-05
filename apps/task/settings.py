@@ -11,31 +11,28 @@ CELERY_DEFAULT_QUEUE = 'celery-demo'
 CELERY_DEFAULT_EXCHANGE = 'celery-demo'
 CELERY_DEFAULT_ROUTING_KEY = 'celery-demo'
 
+# delivery_mode: =1，message不写入磁盘；=2（默认）message会写入磁盘
+default_exchange = Exchange('celery-demo', delivery_mode=1)
+broadcast_exchange = Exchange('celery-demo-broadcast', type='fanout', delivery_mode=1)
+
 CELERY_QUEUES = (
-    # delivery_mode=1，不写入磁盘；delivery_mode=2（默认），写入磁盘
-    Queue('celery-demo', Exchange('celery-demo'), routing_key='default'),
-    # 添加以下队列好像会重复触发
-    # Queue('add', Exchange('celery-demo'), routing_key='add', delivery_mode=1),
-    # Queue('echo', Exchange('celery-demo'), routing_key='echo', delivery_mode=1),
-    Broadcast('broadcast_tasks')
+    # durable: Boolean，重启后是否激活
+    Queue('celery-demo', default_exchange, routing_key='default', auto_delete=True, durable=True),
+    Broadcast('broadcast_tasks', exchange=broadcast_exchange),
+
+    Queue('task1', broadcast_exchange),
+    # Queue('task2', default_exchange, routing_key='task2'),
 )
 
 # 配置路由
 CELERY_ROUTES = (
-    # {
-    #     'apps.task.tasks.add': {
-    #         'queue': 'add',
-    #         # 'routing_key': 'task-one'
-    #     },
-    #     'apps.task.tasks.echo': {
-    #         'queue': 'echo',
-    #         # 'routing_key': 'task-two'
-    #     }
-    # },
     {
         'apps.task.tasks.broadcast_task': {
             'queue': 'broadcast_tasks'
-        }
+        },
+        'apps.task.tasks.task1': {
+            'queue': 'task1',
+        },
     }
 )
 
