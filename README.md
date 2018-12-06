@@ -40,7 +40,7 @@ $ $env:FORKED_BY_MULTIPROCESSING
 最后启动 celery：
 
 ```PowerShell
-celery worker -A task_app.celery -l info
+python task_app.py worker -l info
 ```
 
 ## 测试
@@ -62,5 +62,5 @@ python test_error.py
 ### 定时任务
 
 ```PowerShell
-celery -A task_app.celery beat -l info
+python task_app.py beat -l info
 ```
