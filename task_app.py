@@ -1,33 +1,33 @@
 # cofing=utf-8
-# flake8: noqa
+
 """
-Run:
+启动Work:
 
-```
-$ celery worker -A task_app.celery -l info
-```
+    $ python task_app.py worker -l info
 
-Usage:
+简单任务调度示例:
 
-```
-$ pipenv shell
-$ python
->>> from apps.task import tasks
->>> t = tasks.add.delay(1, 2)
->>> t.get()
-```
+    $ pipenv shell
+    $ python
+    >>> from apps.task import tasks
+    >>> t = tasks.add.delay(1, 2)
+    >>> t.get()
 
-启动定期任务：
+启动定时任务心跳：
 
-```
-$ celery -A task_app.celery beat -l info
-```
+    $ python task_app.py beat -l info
+
+查看Celery状态：
+
+    $ python task_app.py status
 
 查看任务激活的队列：
 
-```
-$ celery -A task_app.celery inspect active_queues
-```
+    $ python task_app.py inspect active_queues
+
+关闭Celery：
+
+    $ python task_app.py control shutdown
 
 """
 

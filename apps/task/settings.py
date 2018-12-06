@@ -59,7 +59,10 @@ beat_schedule = {
         'args': ('hello',)
     },
 }
-
+beat_scheduler = 'celery.beat:PersistentScheduler'
+beat_schedule_filename = 'celerybeat-schedule'
+beat_sync_every = 0
+beat_max_loop_interval = 0
 
 # RabbitMQ
 broker_url = 'amqp://guest:guest@localhost:5672//'
@@ -67,9 +70,10 @@ broker_url = 'amqp://guest:guest@localhost:5672//'
 
 # Using the database to store task state and results.
 # First install sqlalchemy
-# pipenv install sqlalchemy
+# $ pipenv install sqlalchemy
 result_backend = 'db+sqlite:///results.db'
-
+# 非持久化
+result_persistent = False
 
 task_serializer = 'json'
 result_serializer = 'json'
@@ -85,5 +89,5 @@ config_dict = dict(
 
     broker=broker_url,
     result_backend=result_backend,
-    result_persistent=False
+    result_persistent=result_persistent
 )

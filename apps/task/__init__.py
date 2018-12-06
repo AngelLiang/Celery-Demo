@@ -21,4 +21,4 @@ celery = Celery(__name__)
 celery.conf.update(config_dict)
 
 from . import tasks
-# from . import periodic_tasks
+from . import periodic_tasks
