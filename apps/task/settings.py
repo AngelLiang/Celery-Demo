@@ -62,7 +62,9 @@ beat_schedule = {
 beat_scheduler = 'celery.beat:PersistentScheduler'
 beat_schedule_filename = 'celerybeat-schedule'
 beat_sync_every = 0
-beat_max_loop_interval = 0
+# The maximum number of seconds beat can sleep between checking the schedule.
+# default: 0
+beat_max_loop_interval = 5
 
 # RabbitMQ
 broker_url = 'amqp://guest:guest@localhost:5672//'
@@ -90,6 +92,7 @@ config_dict = dict(
 
     timezone=timezone,
     # beat_schedule=beat_schedule,
+    beat_max_loop_interval=beat_max_loop_interval,
 
     broker=broker_url,
     result_backend=result_backend,

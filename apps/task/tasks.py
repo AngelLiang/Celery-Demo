@@ -32,7 +32,7 @@ def timer_task(self, data, countdown=3):
     # new_eta = now_eta + dt.timedelta(3)
     # logger.info(new_eta)
 
-    # 循环调用本任务
+    # 读取配置，是否继续调用本任务
     # self.apply_async(('timer', countdown), countdown=countdown)
 
 
@@ -48,9 +48,7 @@ def error_handler(self, uuid):
 
     usage:
 
-    ```
-    error_task.apply_async(link_error=error_handler.s())
-    ```
+        error_task.apply_async(link_error=error_handler.s())
 
     """
     result = self.app.AsyncResult(uuid)
