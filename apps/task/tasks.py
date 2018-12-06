@@ -1,5 +1,6 @@
 # coding=utf-8
 
+import datetime as dt
 from celery.utils.log import get_task_logger
 
 from . import celery
@@ -14,9 +15,25 @@ def add(x, y):
     return x + y
 
 
-@celery.task(name='echo', base=BaseTask, ignore_result=True)
-def echo(data):
+@celery.task(bind=True, name='echo', base=BaseTask, ignore_result=True)
+def echo(self, data):
     logger.info(data)
+
+
+@celery.task(bind=True, name='echo_timer', base=BaseTask, ignore_result=True)
+def timer_task(self, data, countdown=3):
+    logger.info(data)
+    eta = self.request.eta
+    logger.info(eta)
+    logger.info(type(eta))
+
+    # utc_format = '%Y-%m-%dT%H:%M:%SZ'
+    # now_eta = dt.datetime.strptime(eta, utc_format)
+    # new_eta = now_eta + dt.timedelta(3)
+    # logger.info(new_eta)
+
+    # 循环调用本任务
+    # self.apply_async(('timer', countdown), countdown=countdown)
 
 
 @celery.task(base=BaseTask)
@@ -58,6 +75,7 @@ def broadcast_task():
 
 @celery.task(name='add-periodic-task')
 def add_periodic_task(second=3.0):
+    """添加定时任务"""
     logger.info('add_periodic_task')
     celery.add_periodic_task(second, echo.s(
         'hello'), name='hello every {}s'.format(second))

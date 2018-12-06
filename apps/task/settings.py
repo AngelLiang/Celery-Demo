@@ -79,6 +79,10 @@ task_serializer = 'json'
 result_serializer = 'json'
 accept_content = ['json']
 
+# 防止内存泄漏
+# 默认每个worker跑完10个任务后，自我销毁程序重建来释放内存
+worker_max_tasks_per_child = 10
+
 config_dict = dict(
     # task_default_queue=task_default_queue,
     # tasks_queues=tasks_queues,
@@ -89,5 +93,7 @@ config_dict = dict(
 
     broker=broker_url,
     result_backend=result_backend,
-    result_persistent=result_persistent
+    result_persistent=result_persistent,
+
+    worker_max_tasks_per_child=worker_max_tasks_per_child
 )

@@ -21,4 +21,6 @@ celery = Celery(__name__)
 celery.conf.update(config_dict)
 
 from . import tasks
-from . import periodic_tasks
+
+# bug: 导入了下面模块，shell似乎没法调用task
+# from . import periodic_tasks

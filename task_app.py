@@ -8,10 +8,9 @@
 简单任务调度示例:
 
     $ pipenv shell
-    $ python
-    >>> from apps.task import tasks
-    >>> t = tasks.add.delay(1, 2)
-    >>> t.get()
+    $ python task_app.py shell
+    >>> add.delay(1, 2).get(timeout=3)
+    >>> echo.apply_async(('data', ), countdown=3)
 
 启动定时任务心跳：
 
