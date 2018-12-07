@@ -1,6 +1,9 @@
 # coding=utf-8
+"""
+celery beat -A task_app.celery -S apps.task.database.schedulers.DatabaseScheduler
+"""
 
-# import logging
+import logging
 
 from multiprocessing.util import Finalize
 
@@ -15,10 +18,13 @@ from kombu.utils.json import dumps, loads
 
 
 from .models import (
-    PeriodicTask,
+    PeriodicTask, PeriodicTasks,
     CrontabSchedule, IntervalSchedule,
     SolarSchedule,
 )
+
+from apps.task.database import SessionManager
+session_manager = SessionManager()
 
 # This scheduler must wake up more frequently than the
 # regular of 5 minutes because it needs to take external
@@ -36,19 +42,30 @@ debug, info, warning = logger.debug, logger.info, logger.warning
 class ModelEntry(ScheduleEntry):
     """Scheduler entry taken from database row."""
 
+    model_schedules = (
+        # (schedule_type, model_type, model_field)
+        (schedules.crontab, CrontabSchedule, 'crontab'),
+        (schedules.schedule, IntervalSchedule, 'interval'),
+        (schedules.solar, SolarSchedule, 'solar'),
+    )
+    # 存储的字段
+    save_fields = ['last_run_at', 'total_run_count', 'no_changes']
+
     def __init__(self, model, app=None):
         """Initialize the model entry."""
         self.app = app or current_app._get_current_object()
         self.name = model.name
-        self.task = model.task_name
+        self.task = model.task
+
         try:
             self.schedule = model.schedule
-        except model.DoesNotExist:
+        except Exception:
             logger.error(
                 'Disabling schedule %s that was removed from database',
                 self.name,
             )
             self._disable(model)
+
         try:
             self.args = loads(model.args or '[]')
             self.kwargs = loads(model.kwargs or '{}')
@@ -73,6 +90,7 @@ class ModelEntry(ScheduleEntry):
         if not model.last_run_at:
             model.last_run_at = self._default_now()
         self.last_run_at = model.last_run_at
+        
 
     def _disable(self, model):
         """禁用"""
@@ -82,7 +100,28 @@ class ModelEntry(ScheduleEntry):
 
     def is_due(self):
         """是否到期"""
-        pass
+        if not self.model.enabled:
+            # 5 second delay for re-enable.
+            return schedules.schedstate(False, 5.0)
+
+        # START DATE: only run after the `start_time`, if one exists.
+        if self.model.start_time is not None:
+            if maybe_make_aware(self._default_now()) < self.model.start_time:
+                # The datetime is before the start date - don't run.
+                _, delay = self.schedule.is_due(self.last_run_at)
+                # use original delay for re-check
+                return schedules.schedstate(False, delay)
+
+        # ONE OFF TASK: Disable one off tasks after they've ran once
+        if self.model.one_off and self.model.enabled \
+                and self.model.total_run_count > 0:
+            self.model.enabled = False
+            self.model.total_run_count = 0  # Reset
+            self.model.no_changes = False  # Mark the model entry as changed
+            # self.model.save()   # 保存到数据库
+            return schedules.schedstate(False, None)  # Don't recheck
+
+        return self.schedule.is_due(self.last_run_at)
 
     def __next__(self):
         self.model.last_run_at = self.app.now()
@@ -90,6 +129,104 @@ class ModelEntry(ScheduleEntry):
         self.model.no_changes = True
         return self.__class__(self.model)
     next = __next__  # for 2to3
+
+    def save(self, session):
+        # TODO:
+        # Object may not be synchronized, so only
+        # change the fields we care about.
+        # 对象可能没有同步，所以只修改我们关心的字段。
+        obj = session.query(self.model).get(self.model.id)
+
+        obj = type(self.model)._default_manager.get(pk=self.model.pk)
+        # 获取需要保存的字段并更新model
+        for field in self.save_fields:
+            setattr(obj, field, getattr(self.model, field))
+        session.add(obj)
+        session.commit()
+
+    @classmethod
+    def to_model_schedule(cls, session, schedule):
+        for schedule_type, model_type, model_field in cls.model_schedules:
+            # 转换为 schedule
+            schedule = schedules.maybe_schedule(schedule)
+            if isinstance(schedule, schedule_type):
+                # TODO:
+                model_schedule = model_type.from_schedule(session, schedule)
+
+                session.add(model_schedule)
+                session.commit()
+
+                return model_schedule, model_field
+        raise ValueError(
+            'Cannot convert schedule type {0!r} to model'.format(schedule))
+
+    @classmethod
+    def from_entry(cls, session, name, app=None, **entry):
+        """
+
+        **entry sample:
+
+            {'task': 'celery.backend_cleanup',
+             'schedule': <crontab: 0 4 * * * (m/h/d/dM/MY)>,
+             'options': {'expires': 43200}}
+
+        """
+        periodic_task = session.query(PeriodicTask).filter_by(name=name).first()
+        if not periodic_task:
+            periodic_task = PeriodicTask()
+            periodic_task.name = name
+        temp = cls._unpack_fields(session, **entry)
+
+        # import pdb; pdb.set_trace()
+
+        periodic_task.update(**temp)
+        session.add(periodic_task)
+        try:
+            session.commit()
+        except sqlalchemy.exc.IntegrityError as e:
+            logger.error(exc)
+            session.rollback()
+        except Exception as exc:
+            logger.error(exc)
+            session.rollback()
+
+        return cls(periodic_task, app=app)
+
+    @classmethod
+    def _unpack_fields(cls, session, schedule,
+                       args=None, kwargs=None, relative=None, options=None,
+                       **entry):
+        """解包成字段
+
+        **entry sample:
+
+            {'task': 'celery.backend_cleanup',
+             'schedule': <crontab: 0 4 * * * (m/h/d/dM/MY)>,
+             'options': {'expires': 43200}}
+
+        """
+        # import pdb; pdb.set_trace()
+
+        model_schedule, model_field = cls.to_model_schedule(session, schedule)
+        entry.update(
+            # {model_field: model_schedule},  # 需要关联的model
+            {model_field+'_id': model_schedule.id},  # 需要关联的model_id
+            args=dumps(args or []),
+            kwargs=dumps(kwargs or {}),
+            **cls._unpack_options(**options or {})  # 解包
+        )
+        return entry
+
+    @classmethod
+    def _unpack_options(cls, queue=None, exchange=None, routing_key=None,
+                        priority=None, **kwargs):
+        """options解包成dict"""
+        return {
+            'queue': queue,
+            'exchange': exchange,
+            'routing_key': routing_key,
+            'priority': priority
+        }
 
     def __repr__(self):
         return '<ModelEntry: {0} {1}(*{2}, **{3}) {4}>'.format(
@@ -102,7 +239,7 @@ class DatabaseScheduler(Scheduler):
 
     Entry = ModelEntry
     Model = PeriodicTask
-    # Changes = PeriodicTasks
+    Changes = PeriodicTasks
 
     _schedule = None
     _last_timestamp = None
@@ -112,6 +249,10 @@ class DatabaseScheduler(Scheduler):
     def __init__(self, *args, **kwargs):
         """Initialize the database scheduler."""
         self._dirty = set()
+
+        self.dburi = 'sqlite:///schedule.db'
+        self.session = self._create_session()
+
         Scheduler.__init__(self, *args, **kwargs)
         self._finalize = Finalize(self, self.sync, exitpriority=5)
         self.max_interval = (
@@ -119,14 +260,22 @@ class DatabaseScheduler(Scheduler):
             or self.app.conf.beat_max_loop_interval
             or DEFAULT_MAX_INTERVAL)
 
+    def _create_session(self):
+        return session_manager.session_factory(dburi=self.dburi)
+
     def setup_schedule(self):
+        """override"""
         self.install_default_entries(self.schedule)
         self.update_from_dict(self.app.conf.beat_schedule)
 
     def all_as_schedule(self):
+        # TODO:
         debug('DatabaseScheduler: Fetching database schedule')
+        # 获取所有使能的 PeriodicTask
+        models = self.session.query(self.Model).filter_by(enabled=True).all()
+        info(models)
         s = {}
-        for model in self.Model.objects.enabled():
+        for model in models:
             try:
                 s[model.name] = self.Entry(model, app=self.app)
             except ValueError:
@@ -134,27 +283,17 @@ class DatabaseScheduler(Scheduler):
         return s
 
     def schedule_changed(self):
-        try:
-            close_old_connections()
+        # TODO:
 
-            # If MySQL is running with transaction isolation level
-            # REPEATABLE-READ (default), then we won't see changes done by
-            # other transactions until the current transaction is
-            # committed (Issue #41).
-            try:
-                transaction.commit()
-            except transaction.TransactionManagementError:
-                pass  # not in transaction management.
+        # 重新创建新的数据库连接
+        # self.session.close()
+        # self.session = self._create_session()
 
-            last, ts = self._last_timestamp, self.Changes.last_change()
-        except DatabaseError as exc:
-            logger.exception('Database gave error: %r', exc)
-            return False
-        except InterfaceError:
-            warning(
-                'DatabaseScheduler: InterfaceError in schedule_changed(), '
-                'waiting to retry in next call...'
-            )
+        # self.session.commit()
+        changes = self.session.query(self.Changes).get(1)
+        if changes:
+            last, ts = self._last_timestamp, changes.last_change()
+        else:
             return False
 
         try:
@@ -164,22 +303,48 @@ class DatabaseScheduler(Scheduler):
             self._last_timestamp = ts
         return False
 
+    def reserve(self, entry):
+        new_entry = next(entry)
+        # Need to store entry by name, because the entry may change
+        # in the mean time.
+        self._dirty.add(new_entry.name)
+        return new_entry
+
     def sync(self):
         """同步"""
+        # TODO:
         info('Writing entries...')
+        _tried = set()
+        _failed = set()
+        try:
+            while self._dirty:
+                name = self._dirty.pop()
+                try:
+                    # self.schedule[name].save()
+                    _tried.add(name)
+                except (KeyError, ObjectDoesNotExist) as exc:
+                    _failed.add(name)
+        except sqlalchemy.exc.IntegrityError as exc:
+            logger.exception('Database error while sync: %r', exc)
+        except Exception as exc:
+            logger.exception(exc)
+        finally:
+            # retry later, only for the failed ones
+            self._dirty |= _failed
 
     def update_from_dict(self, mapping):
         s = {}
         for name, entry_fields in items(mapping):
+            # {'task': 'celery.backend_cleanup',
+            #  'schedule': <crontab: 0 4 * * * (m/h/d/dM/MY)>,
+            #  'options': {'expires': 43200}}
             try:
-                entry = self.Entry.from_entry(name,
-                                              app=self.app,
-                                              **entry_fields)
+                entry = self.Entry.from_entry(self.session, name, app=self.app, **entry_fields)
                 if entry.model.enabled:
                     s[name] = entry
-
             except Exception as exc:
                 logger.error(ADD_ENTRY_ERROR, name, exc, entry_fields)
+
         self.schedule.update(s)
 
     def install_default_entries(self, data):
@@ -193,6 +358,13 @@ class DatabaseScheduler(Scheduler):
                 },
             )
         self.update_from_dict(entries)
+
+
+    def schedules_equal(self, *args, **kwargs):
+        if self._heap_invalidated:
+            self._heap_invalidated = False
+            return False
+        return super(DatabaseScheduler, self).schedules_equal(*args, **kwargs)
 
     @property
     def schedule(self):
@@ -217,3 +389,9 @@ class DatabaseScheduler(Scheduler):
                     repr(entry) for entry in values(self._schedule)),
                 )
         return self._schedule
+
+    @property
+    def info(self):
+        """override"""
+        # return infomation about Schedule
+        return '    . db -> {self.dburi}'.format(self=self)
