@@ -14,7 +14,6 @@ from .tzcrontab import TzAwareCrontab
 from .session import ModelBase
 
 
-
 DAYS = 'days'
 HOURS = 'hours'
 MINUTES = 'minutes'
@@ -64,16 +63,15 @@ class SolarSchedule(ModelBase, ModelMixin):
         spec = {'event': schedule.event,
                 'latitude': schedule.lat,
                 'longitude': schedule.lon}
-        model = session.query(SolarSchedule).filter_by(**spec).first()
+        models = session.query(SolarSchedule).filter_by(**spec).all()
         if models:
             # 删除多余的model
             for model in models[1:]:
                 session.delete(model)
             session.commit()
-            return models[0] # 返回第一个model
+            return models[0]  # 返回第一个model
         else:
             return cls(**spec)
-
 
     def __repr__(self):
         return '{0} ({1}, {2})'.format(
@@ -114,7 +112,7 @@ class IntervalSchedule(ModelBase, ModelMixin):
             for model in models[1:]:
                 session.delete(model)
             session.commit()
-            return models[0] # 返回第一个model
+            return models[0]  # 返回第一个model
         else:
             return cls(every=every, period=period)
 
@@ -149,7 +147,7 @@ class CrontabSchedule(ModelBase, ModelMixin):
             hour=self.hour, day_of_week=self.day_of_week,
             day_of_month=self.day_of_month,
             month_of_year=self.month_of_year,
-            tz=self.timezone
+            # tz=self.timezone
         )
 
     @classmethod
@@ -166,8 +164,8 @@ class CrontabSchedule(ModelBase, ModelMixin):
             # 删除多余的model
             for model in models[1:]:
                 session.delete(model)
-            session.commit()            
-            return models[0] # 返回第一个model
+            session.commit()
+            return models[0]  # 返回第一个model
         else:
             return cls(**spec)
 

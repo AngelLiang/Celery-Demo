@@ -1,9 +1,14 @@
 # coding=utf-8
 """
-celery beat -A task_app.celery -S apps.task.database.schedulers.DatabaseScheduler
+Run:
+
+    $ celery beat -A task_app.celery -l debug -S apps.task.database.schedulers.DatabaseScheduler
+
 """
 
 import logging
+
+import sqlalchemy
 
 from multiprocessing.util import Finalize
 
@@ -90,7 +95,6 @@ class ModelEntry(ScheduleEntry):
         if not model.last_run_at:
             model.last_run_at = self._default_now()
         self.last_run_at = model.last_run_at
-        
 
     def _disable(self, model):
         """禁用"""
@@ -136,8 +140,6 @@ class ModelEntry(ScheduleEntry):
         # change the fields we care about.
         # 对象可能没有同步，所以只修改我们关心的字段。
         obj = session.query(self.model).get(self.model.id)
-
-        obj = type(self.model)._default_manager.get(pk=self.model.pk)
         # 获取需要保存的字段并更新model
         for field in self.save_fields:
             setattr(obj, field, getattr(self.model, field))
@@ -171,19 +173,17 @@ class ModelEntry(ScheduleEntry):
              'options': {'expires': 43200}}
 
         """
-        periodic_task = session.query(PeriodicTask).filter_by(name=name).first()
+        periodic_task = session.query(
+            PeriodicTask).filter_by(name=name).first()
         if not periodic_task:
             periodic_task = PeriodicTask()
             periodic_task.name = name
         temp = cls._unpack_fields(session, **entry)
-
-        # import pdb; pdb.set_trace()
-
         periodic_task.update(**temp)
         session.add(periodic_task)
         try:
             session.commit()
-        except sqlalchemy.exc.IntegrityError as e:
+        except sqlalchemy.exc.IntegrityError as exc:
             logger.error(exc)
             session.rollback()
         except Exception as exc:
@@ -205,12 +205,10 @@ class ModelEntry(ScheduleEntry):
              'options': {'expires': 43200}}
 
         """
-        # import pdb; pdb.set_trace()
-
         model_schedule, model_field = cls.to_model_schedule(session, schedule)
         entry.update(
             # {model_field: model_schedule},  # 需要关联的model
-            {model_field+'_id': model_schedule.id},  # 需要关联的model_id
+            {model_field + '_id': model_schedule.id},  # 需要关联的model_id
             args=dumps(args or []),
             kwargs=dumps(kwargs or {}),
             **cls._unpack_options(**options or {})  # 解包
@@ -322,7 +320,8 @@ class DatabaseScheduler(Scheduler):
                 try:
                     # self.schedule[name].save()
                     _tried.add(name)
-                except (KeyError, ObjectDoesNotExist) as exc:
+                except (KeyError) as exc:
+                    logger.error(exc)
                     _failed.add(name)
         except sqlalchemy.exc.IntegrityError as exc:
             logger.exception('Database error while sync: %r', exc)
@@ -339,7 +338,8 @@ class DatabaseScheduler(Scheduler):
             #  'schedule': <crontab: 0 4 * * * (m/h/d/dM/MY)>,
             #  'options': {'expires': 43200}}
             try:
-                entry = self.Entry.from_entry(self.session, name, app=self.app, **entry_fields)
+                entry = self.Entry.from_entry(
+                    self.session, name, app=self.app, **entry_fields)
                 if entry.model.enabled:
                     s[name] = entry
             except Exception as exc:
@@ -358,7 +358,6 @@ class DatabaseScheduler(Scheduler):
                 },
             )
         self.update_from_dict(entries)
-
 
     def schedules_equal(self, *args, **kwargs):
         if self._heap_invalidated:

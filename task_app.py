@@ -3,6 +3,10 @@
 """
 启动Work:
 
+    $ celery worker -A task_app.celery -l info
+
+    OR
+
     $ python task_app.py worker -l info
 
 简单任务调度示例:
@@ -13,6 +17,10 @@
     >>> echo.apply_async(('data', ), countdown=3)
 
 启动定时任务心跳：
+
+    $ celery beat -A task_app.celery -l info
+
+    OR
 
     $ python task_app.py beat -l info
 
