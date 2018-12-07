@@ -3,8 +3,10 @@
 import datetime as dt
 
 import sqlalchemy as sa
+from sqlalchemy.orm import relationship
 # from sqlalchemy.types import PickleType
 
+from celery import schedules
 # from celery import states
 from celery.five import python_2_unicode_compatible
 
@@ -33,6 +35,29 @@ class SolarSchedule(ModelBase):
     latitude = sa.Column(sa.Float())
     longitude = sa.Column(sa.Float())
 
+    @property
+    def schedule(self):
+        return schedules.solar(
+            self.event,
+            self.latitude,
+            self.longitude,
+            nowfun=dt.datetime.now()
+        )
+
+    @classmethod
+    def from_schedule(cls, session, schedule):
+        spec = {'event': schedule.event,
+                'latitude': schedule.lat,
+                'longitude': schedule.lon}
+        return session.query(SolarSchedule).filter_by(**spec).first()
+
+    def __repr__(self):
+        return '{0} ({1}, {2})'.format(
+            self.event,
+            self.latitude,
+            self.longitude
+        )
+
 
 @python_2_unicode_compatible
 class IntervalSchedule(ModelBase):
@@ -44,10 +69,22 @@ class IntervalSchedule(ModelBase):
     every = sa.Column(sa.Integer, nullable=False)
     period = sa.Column(sa.String(24))
 
-    def __str__(self):
+    def __repr__(self):
         if self.every == 1:
             return 'every {0.period_singular}'.format(self)
         return 'every {0.every} {0.period}'.format(self)
+
+    @property
+    def schedule(self):
+        return schedules.schedule(
+            dt.timedelta(**{self.period: self.every}),
+            # nowfun=lambda: make_aware(now())
+        )
+
+    @classmethod
+    def from_schedule(cls, session, schedule, period=SECONDS):
+        every = max(schedule.run_every.total_seconds(), 0)
+        return session.query(IntervalSchedule).filter_by(every=every, period=period).first()
 
     @property
     def period_singular(self):
@@ -67,7 +104,7 @@ class CrontabSchedule(ModelBase):
     month_of_year = sa.Column(sa.String(64), default='*')
     timezone = sa.Column(sa.String(64), default='UTC')
 
-    def __str__(self):
+    def __repr__(self):
         return '{0} {1} {2} {3} {4} (m/h/d/dM/MY) {5}'.format(
             cronexp(self.minute), cronexp(self.hour),
             cronexp(self.day_of_week), cronexp(self.day_of_month),
@@ -77,6 +114,37 @@ class CrontabSchedule(ModelBase):
     @classmethod
     def from_schedule(cls, schedule):
         pass
+
+
+class PeriodicTasks(ModelBase):
+    """Helper table for tracking updates to periodic tasks."""
+
+    __tablename__ = 'celery_periodic_tasks'
+    __table_args__ = {'sqlite_autoincrement': True}
+
+    id = sa.Column(sa.Integer, primary_key=True, autoincrement=True)
+    last_update = sa.Column(sa.DateTime(), nullable=False, default=dt.datetime.now)
+
+    @classmethod
+    def changed(cls, instance, **kwargs):
+        if not instance.no_changes:
+            cls.update_changed()
+
+    @classmethod
+    def update_changed(cls, session, **kwargs):
+        periodic_tasks = session.query(PeriodicTasks).get(1)
+        if not periodic_tasks:
+            periodic_tasks = PeriodicTasks()
+            periodic_tasks.id = 1
+        periodic_tasks.last_update = dt.datetime.now()
+        session.add(periodic_tasks)
+        session.commit()
+
+    @classmethod
+    def last_change(cls, session):
+        periodic_tasks = session.query(PeriodicTasks).get(1)
+        if periodic_tasks:
+            return periodic_tasks.last_update
 
 
 @python_2_unicode_compatible
@@ -91,11 +159,14 @@ class PeriodicTask(ModelBase):
     # 任务名称
     task_name = sa.Column(sa.String(200), unique=True)
 
-    interval = sa.Column(sa.ForeignKey(IntervalSchedule.id), nullable=True)
+    interval_id = sa.Column(sa.ForeignKey(IntervalSchedule.id), nullable=True)
+    interval = relationship('IntervalSchedule', cascade="all, delete")
 
-    crontab = sa.Column(sa.ForeignKey(CrontabSchedule.id), nullable=True)
+    crontab_id = sa.Column(sa.ForeignKey(CrontabSchedule.id), nullable=True)
+    crontab = relationship('IntervalSchedule', cascade="all, delete")
 
-    solar = sa.Column(sa.ForeignKey(SolarSchedule.id), nullable=True)
+    solar_id = sa.Column(sa.ForeignKey(SolarSchedule.id), nullable=True)
+    solar = relationship('IntervalSchedule', cascade="all, delete")
 
     # 参数
     args = sa.Column(sa.Text(), default='[]')
@@ -129,7 +200,7 @@ class PeriodicTask(ModelBase):
 
     no_changes = False
 
-    def __str__(self):
+    def __repr__(self):
         fmt = '{0.name}: {{no schedule}}'
         if self.interval:
             fmt = '{0.name}: {0.interval}'
