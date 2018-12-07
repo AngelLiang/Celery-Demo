@@ -246,11 +246,12 @@ class DatabaseScheduler(Scheduler):
 
     def __init__(self, *args, **kwargs):
         """Initialize the database scheduler."""
-        self._dirty = set()
-
-        self.dburi = 'sqlite:///schedule.db'
+        self.app = kwargs['app']
+        self.dburi = kwargs.get('dburi') or self.app.conf.get(
+            'beat_dburi') or 'sqlite:///schedule.db'
         self.session = self._create_session()
 
+        self._dirty = set()
         Scheduler.__init__(self, *args, **kwargs)
         self._finalize = Finalize(self, self.sync, exitpriority=5)
         self.max_interval = (

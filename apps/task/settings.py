@@ -66,6 +66,8 @@ beat_sync_every = 0
 # The maximum number of seconds beat can sleep between checking the schedule.
 # default: 0
 beat_max_loop_interval = 5
+# 自定义配置
+beat_dburi = 'sqlite:///schedule.db'
 
 # RabbitMQ
 broker_url = 'amqp://guest:guest@localhost:5672//'
@@ -94,6 +96,7 @@ config_dict = dict(
     timezone=timezone,
     # beat_schedule=beat_schedule,
     beat_max_loop_interval=beat_max_loop_interval,
+    beat_dburi=beat_dburi,
 
     broker=broker_url,
     result_backend=result_backend,
