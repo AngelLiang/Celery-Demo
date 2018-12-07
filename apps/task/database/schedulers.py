@@ -271,7 +271,7 @@ class DatabaseScheduler(Scheduler):
         debug('DatabaseScheduler: Fetching database schedule')
         # 获取所有使能的 PeriodicTask
         models = self.session.query(self.Model).filter_by(enabled=True).all()
-        info(models)
+        # self.session.close()
         s = {}
         for model in models:
             try:
@@ -284,11 +284,10 @@ class DatabaseScheduler(Scheduler):
         # TODO:
 
         # 重新创建新的数据库连接
-        # self.session.close()
         # self.session = self._create_session()
-
-        # self.session.commit()
         changes = self.session.query(self.Changes).get(1)
+        # self.session.close()
+
         if changes:
             last, ts = self._last_timestamp, changes.last_change()
         else:
@@ -318,7 +317,7 @@ class DatabaseScheduler(Scheduler):
             while self._dirty:
                 name = self._dirty.pop()
                 try:
-                    # self.schedule[name].save()
+                    self.schedule[name]
                     _tried.add(name)
                 except (KeyError) as exc:
                     logger.error(exc)
@@ -367,6 +366,7 @@ class DatabaseScheduler(Scheduler):
 
     @property
     def schedule(self):
+        # self.session = self._create_session()
         initial = update = False
         if self._initial_read:
             debug('DatabaseScheduler: initial read')
@@ -387,6 +387,7 @@ class DatabaseScheduler(Scheduler):
                 debug('Current schedule:\n%s', '\n'.join(
                     repr(entry) for entry in values(self._schedule)),
                 )
+        # self.session.close()
         return self._schedule
 
     @property
