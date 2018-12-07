@@ -30,6 +30,7 @@ from .models import (
 
 from apps.task.database import SessionManager
 session_manager = SessionManager()
+# session = session_manager()
 
 # This scheduler must wake up more frequently than the
 # regular of 5 minutes because it needs to take external
@@ -56,9 +57,11 @@ class ModelEntry(ScheduleEntry):
     # 存储的字段
     save_fields = ['last_run_at', 'total_run_count', 'no_changes']
 
-    def __init__(self, model, app=None):
+    def __init__(self, model, app=None, **kw):
         """Initialize the model entry."""
         self.app = app or current_app._get_current_object()
+        self.session = kw.get('session')
+
         self.name = model.name
         self.task = model.task
 
@@ -100,7 +103,8 @@ class ModelEntry(ScheduleEntry):
         """禁用"""
         model.no_changes = True
         model.enabled = False
-        # model.save()
+        self.session.add(model)
+        self.session.commit()
 
     def is_due(self):
         """是否到期"""
@@ -122,7 +126,10 @@ class ModelEntry(ScheduleEntry):
             self.model.enabled = False
             self.model.total_run_count = 0  # Reset
             self.model.no_changes = False  # Mark the model entry as changed
-            # self.model.save()   # 保存到数据库
+            # 保存到数据库
+            self.session.add(self.model)
+            self.session.commit()
+
             return schedules.schedstate(False, None)  # Don't recheck
 
         return self.schedule.is_due(self.last_run_at)
@@ -134,17 +141,17 @@ class ModelEntry(ScheduleEntry):
         return self.__class__(self.model)
     next = __next__  # for 2to3
 
-    def save(self, session):
+    def save(self):
         # TODO:
         # Object may not be synchronized, so only
         # change the fields we care about.
         # 对象可能没有同步，所以只修改我们关心的字段。
-        obj = session.query(self.model).get(self.model.id)
+        obj = self.session.query(self.model).get(self.model.id)
         # 获取需要保存的字段并更新model
         for field in self.save_fields:
             setattr(obj, field, getattr(self.model, field))
-        session.add(obj)
-        session.commit()
+        self.session.add(obj)
+        self.session.commit()
 
     @classmethod
     def to_model_schedule(cls, session, schedule):
@@ -276,7 +283,8 @@ class DatabaseScheduler(Scheduler):
         s = {}
         for model in models:
             try:
-                s[model.name] = self.Entry(model, app=self.app)
+                s[model.name] = self.Entry(
+                    model, app=self.app, session=self.session)
             except ValueError:
                 pass
         return s
@@ -318,7 +326,9 @@ class DatabaseScheduler(Scheduler):
             while self._dirty:
                 name = self._dirty.pop()
                 try:
-                    self.schedule[name]
+                    # self.schedule[name].save()
+                    print(self.schedule[name])
+                    self.session.add(self.schedule[name])
                     _tried.add(name)
                 except (KeyError) as exc:
                     logger.error(exc)
@@ -328,6 +338,7 @@ class DatabaseScheduler(Scheduler):
         except Exception as exc:
             logger.exception(exc)
         finally:
+            self.session.commit()
             # retry later, only for the failed ones
             self._dirty |= _failed
 
@@ -345,6 +356,7 @@ class DatabaseScheduler(Scheduler):
             except Exception as exc:
                 logger.error(ADD_ENTRY_ERROR, name, exc, entry_fields)
 
+        # 更新 self.schedule
         self.schedule.update(s)
 
     def install_default_entries(self, data):

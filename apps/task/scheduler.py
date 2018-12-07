@@ -38,9 +38,11 @@ class RedisScheduler(Scheduler):
         self.multi_node = app.conf.get("CELERY_REDIS_MULTI_NODE_MODE", False)
         # how long we should hold on to the redis lock in seconds
         if self.multi_node:
-            self.lock_ttl = current_app.conf.get("CELERY_REDIS_SCHEDULER_LOCK_TTL", 30)
+            self.lock_ttl = current_app.conf.get(
+                "CELERY_REDIS_SCHEDULER_LOCK_TTL", 30)
             self._lock_acquired = False
-            self._lock = self.rdb.lock('celery:beat:task_lock', timeout=self.lock_ttl)
+            self._lock = self.rdb.lock(
+                'celery:beat:task_lock', timeout=self.lock_ttl)
             self._lock_acquired = self._lock.acquire(blocking=False)
 
     def _remove_db(self):
@@ -58,7 +60,8 @@ class RedisScheduler(Scheduler):
             repr(pickle.loads(entry)) for entry in tasks))
 
     def merge_inplace(self, tasks):
-        old_entries = self.rdb.zrangebyscore(self.key, 0, MAXINT, withscores=True)
+        old_entries = self.rdb.zrangebyscore(
+            self.key, 0, MAXINT, withscores=True)
         old_entries_dict = dict({})
         for task, score in old_entries:
             entry = pickle.loads(task)
@@ -74,12 +77,14 @@ class RedisScheduler(Scheduler):
                 # replace entry and remain old score
                 last_run_at = old_entries_dict[key][1]
                 del old_entries_dict[key]
-            self.rdb.zadd(self.key, min(last_run_at, self._when(e, e.is_due()[1]) or 0), pickle.dumps(e))
+            self.rdb.zadd(self.key, min(last_run_at, self._when(
+                e, e.is_due()[1]) or 0), pickle.dumps(e))
         debug("old_entries: {}".format(old_entries_dict))
         for key, tasks in old_entries_dict.items():
             debug("key: {}".format(key))
             debug("tasks: {}".format(tasks))
-            debug("zadd: {}".format(self.rdb.zadd(self.key, tasks[1], pickle.dumps(tasks[0]))))
+            debug("zadd: {}".format(self.rdb.zadd(
+                self.key, tasks[1], pickle.dumps(tasks[0]))))
         debug(self.rdb.zrange(self.key, 0, -1))
 
     def is_due(self, entry):
@@ -92,7 +97,8 @@ class RedisScheduler(Scheduler):
 
     def add(self, **kwargs):
         e = self.Entry(app=current_app, **kwargs)
-        self.rdb.zadd(self.key, self._when(e, e.is_due()[1]) or 0, pickle.dumps(e))
+        self.rdb.zadd(self.key, self._when(
+            e, e.is_due()[1]) or 0, pickle.dumps(e))
         return True
 
     def remove(self, task_key):
@@ -102,7 +108,8 @@ class RedisScheduler(Scheduler):
         if not self.rdb.exists(self.key):
             logger.warn("key: {} not in rdb".format(self.key))
             for e in values(self.schedule):
-                self.rdb.zadd(self.key, self._when(e, e.is_due()[1]) or 0, pickle.dumps(e))
+                self.rdb.zadd(self.key, self._when(
+                    e, e.is_due()[1]) or 0, pickle.dumps(e))
 
         tasks = self.rdb.zrangebyscore(
             self.key, 0,
@@ -127,9 +134,11 @@ class RedisScheduler(Scheduler):
                 else:
                     debug('%s sent. id->%s', entry.task, result.id)
                 self.rdb.zrem(self.key, task)
-                self.rdb.zadd(self.key, self._when(next_entry, next_time_to_run) or 0, pickle.dumps(next_entry))
+                self.rdb.zadd(self.key, self._when(
+                    next_entry, next_time_to_run) or 0, pickle.dumps(next_entry))
 
-        next_task = self.rdb.zrangebyscore(self.key, 0, MAXINT, withscores=True, num=1, start=0)
+        next_task = self.rdb.zrangebyscore(
+            self.key, 0, MAXINT, withscores=True, num=1, start=0)
         if not next_task:
             linfo("no next task found")
             return min(next_times)
@@ -150,4 +159,4 @@ class RedisScheduler(Scheduler):
     @property
     def info(self):
         # return infomation about Schedule
-return '    . db -> {self.schedule_url}, key -> {self.key}'.format(self=self)
+        return '    . db -> {self.schedule_url}, key -> {self.key}'.format(self=self)
