@@ -28,6 +28,7 @@ from .models import (
     CrontabSchedule, IntervalSchedule,
     SolarSchedule,
 )
+from . import session_cleanup
 
 from apps.task.database import SessionManager
 session_manager = SessionManager()
@@ -61,7 +62,6 @@ class ModelEntry(ScheduleEntry):
     def __init__(self, model, app=None, **kw):
         """Initialize the model entry."""
         self.app = app or current_app._get_current_object()
-        self.session = kw.get('session')
         self.Session = kw.get('Session')
 
         self.name = model.name
@@ -108,12 +108,13 @@ class ModelEntry(ScheduleEntry):
         """禁用"""
         model.no_changes = True
         model.enabled = False
-        self.session.add(model)
-        self.session.commit()
+        session = self.Session()
+        with session_cleanup(session):
+            session.add(model)
+            session.commit()
 
     def is_due(self):
         """是否到期"""
-        # now = self.app.now().replace(tzinfo=None)   # 使用没有时区的datetime
         if not self.model.enabled:
             # 5 second delay for re-enable.
             return schedules.schedstate(False, 5.0)
@@ -156,15 +157,17 @@ class ModelEntry(ScheduleEntry):
 
     def save(self):
         # TODO:
-        # Object may not be synchronized, so only
-        # change the fields we care about.
-        # 对象可能没有同步，所以只修改我们关心的字段。
-        obj = self.session.query(PeriodicTask).get(self.model.id)
-        # 获取需要保存的字段并更新model
-        for field in self.save_fields:
-            setattr(obj, field, getattr(self.model, field))
-        self.session.add(obj)
-        self.session.commit()
+        session = self.Session()
+        with session_cleanup(session):
+            # Object may not be synchronized, so only
+            # change the fields we care about.
+            # 对象可能没有同步，所以只修改我们关心的字段。
+            obj = session.query(PeriodicTask).get(self.model.id)
+            # 获取需要保存的字段并更新model
+            for field in self.save_fields:
+                setattr(obj, field, getattr(self.model, field))
+            session.add(obj)
+            session.commit()
 
     @classmethod
     def to_model_schedule(cls, session, schedule):
@@ -271,7 +274,6 @@ class DatabaseScheduler(Scheduler):
         self.dburi = kwargs.get('dburi') or self.app.conf.get(
             'beat_dburi') or 'sqlite:///schedule.db'
         self.engine, self.Session = session_manager.create_session(self.dburi)
-        self.session = self._create_session()
 
         self._dirty = set()
         Scheduler.__init__(self, *args, **kwargs)
@@ -291,35 +293,42 @@ class DatabaseScheduler(Scheduler):
 
     def all_as_schedule(self):
         # TODO:
-        debug('DatabaseScheduler: Fetching database schedule')
-        # 获取所有使能的 PeriodicTask
-        models = self.session.query(self.Model).filter_by(enabled=True).all()
-        s = {}
-        for model in models:
-            try:
-                s[model.name] = self.Entry(
-                    model, app=self.app, session=self.session, Session=self.Session)
-            except ValueError:
-                pass
-        return s
+        session = self.Session()
+        with session_cleanup(session):
+            debug('DatabaseScheduler: Fetching database schedule')
+            # 获取所有使能的 PeriodicTask
+            models = session.query(self.Model).filter_by(enabled=True).all()
+            s = {}
+            for model in models:
+                try:
+                    s[model.name] = self.Entry(
+                        model, app=self.app, Session=self.Session)
+                except ValueError:
+                    pass
+            return s
 
     def schedule_changed(self):
         # TODO:
-        changes = self.session.query(self.Changes).get(1)
-        if changes:
-            last, ts = self._last_timestamp, changes.last_update
-        else:
-            changes = self.Changes(id=1)
-            self.session.add(changes)
-            self.session.commit()
-            return False
+        debug('_last_timestamp={}'.format(self._last_timestamp))
 
-        try:
-            if ts and ts > (last if last else ts):
-                return True
-        finally:
-            self._last_timestamp = ts
-        return False
+        session = self.Session()
+        with session_cleanup(session):
+            changes = session.query(self.Changes).get(1)
+            if changes:
+                last, ts = self._last_timestamp, changes.last_update
+                debug('ts={}'.format(ts))
+            else:
+                changes = self.Changes(id=1)
+                session.add(changes)
+                session.commit()
+                return False
+
+            try:
+                if ts and ts > (last if last else ts):
+                    return True
+            finally:
+                self._last_timestamp = ts
+            return False
 
     def reserve(self, entry):
         """override
@@ -412,7 +421,8 @@ class DatabaseScheduler(Scheduler):
                 debug('Current schedule:\n%s', '\n'.join(
                     repr(entry) for entry in values(self._schedule)),
                 )
-
+        debug('initial ={}, update={}'.format(initial, update))
+        debug(self._schedule)
         return self._schedule
 
     @property
