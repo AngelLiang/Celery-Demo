@@ -7,6 +7,7 @@ from sqlalchemy.orm import relationship
 # from sqlalchemy.types import PickleType
 
 from celery import schedules
+from celery.utils.time import localize
 # from celery import states
 from celery.five import python_2_unicode_compatible
 
@@ -101,12 +102,14 @@ class IntervalSchedule(ModelBase, ModelMixin):
         return schedules.schedule(
             dt.timedelta(**{self.period: self.every}),
             # nowfun=lambda: make_aware(now())
+            # nowfun=dt.datetime.now
         )
 
     @classmethod
     def from_schedule(cls, session, schedule, period=SECONDS):
         every = max(schedule.run_every.total_seconds(), 0)
-        models = session.query(IntervalSchedule).filter_by(every=every, period=period).all()
+        models = session.query(IntervalSchedule).filter_by(
+            every=every, period=period).all()
         if models:
             # 删除多余的model
             for model in models[1:]:
@@ -177,7 +180,8 @@ class PeriodicTasks(ModelBase, ModelMixin):
     __table_args__ = {'sqlite_autoincrement': True}
 
     id = sa.Column(sa.Integer, primary_key=True, autoincrement=True)
-    last_update = sa.Column(sa.DateTime(), nullable=False, default=dt.datetime.now)
+    last_update = sa.Column(
+        sa.DateTime(), nullable=False, default=dt.datetime.now)
 
     @classmethod
     def changed(cls, instance, **kwargs):

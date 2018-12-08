@@ -6,6 +6,7 @@ Run:
 
 """
 
+import datetime as dt
 import logging
 
 import sqlalchemy
@@ -54,7 +55,7 @@ class ModelEntry(ScheduleEntry):
         (schedules.schedule, IntervalSchedule, 'interval'),
         (schedules.solar, SolarSchedule, 'solar'),
     )
-    # 存储的字段
+    # 存储的字段，以下数据库的字段会被本程序修改
     save_fields = ['last_run_at', 'total_run_count', 'no_changes']
 
     def __init__(self, model, app=None, **kw):
@@ -67,6 +68,7 @@ class ModelEntry(ScheduleEntry):
 
         try:
             self.schedule = model.schedule
+            debug('schedule: {}'.format(self.schedule))
         except Exception:
             logger.error(
                 'Disabling schedule %s that was removed from database',
@@ -98,6 +100,8 @@ class ModelEntry(ScheduleEntry):
         if not model.last_run_at:
             model.last_run_at = self._default_now()
         self.last_run_at = model.last_run_at
+        # 因为从数据库读取的 last_run_at 可能没有时区信息，所以这里必须加上时区信息
+        self.last_run_at = self.last_run_at.replace(tzinfo=self.app.timezone)
 
     def _disable(self, model):
         """禁用"""
@@ -108,6 +112,7 @@ class ModelEntry(ScheduleEntry):
 
     def is_due(self):
         """是否到期"""
+        # now = self.app.now().replace(tzinfo=None)   # 使用没有时区的datetime
         if not self.model.enabled:
             # 5 second delay for re-enable.
             return schedules.schedstate(False, 5.0)
@@ -127,8 +132,7 @@ class ModelEntry(ScheduleEntry):
             self.model.total_run_count = 0  # Reset
             self.model.no_changes = False  # Mark the model entry as changed
             # 保存到数据库
-            self.session.add(self.model)
-            self.session.commit()
+            self.save()
 
             return schedules.schedstate(False, None)  # Don't recheck
 
@@ -154,7 +158,7 @@ class ModelEntry(ScheduleEntry):
         # Object may not be synchronized, so only
         # change the fields we care about.
         # 对象可能没有同步，所以只修改我们关心的字段。
-        obj = self.session.query(self.model).get(self.model.id)
+        obj = self.session.query(PeriodicTask).get(self.model.id)
         # 获取需要保存的字段并更新model
         for field in self.save_fields:
             setattr(obj, field, getattr(self.model, field))
@@ -179,7 +183,7 @@ class ModelEntry(ScheduleEntry):
 
     @classmethod
     def from_entry(cls, session, name, app=None, **entry):
-        """
+        """从entry加载数据
 
         **entry sample:
 
@@ -299,15 +303,13 @@ class DatabaseScheduler(Scheduler):
 
     def schedule_changed(self):
         # TODO:
-
-        # 重新创建新的数据库连接
-        # self.session = self._create_session()
         changes = self.session.query(self.Changes).get(1)
-        # self.session.close()
-
         if changes:
-            last, ts = self._last_timestamp, changes.last_change()
+            last, ts = self._last_timestamp, changes.last_update
         else:
+            changes = self.Changes(id=1)
+            self.session.add(changes)
+            self.session.commit()
             return False
 
         try:
@@ -318,6 +320,10 @@ class DatabaseScheduler(Scheduler):
         return False
 
     def reserve(self, entry):
+        """override
+
+        在父类的 tick() 中会调用
+        """
         new_entry = next(entry)
         # Need to store entry by name, because the entry may change
         # in the mean time.
@@ -334,9 +340,7 @@ class DatabaseScheduler(Scheduler):
             while self._dirty:
                 name = self._dirty.pop()
                 try:
-                    # self.schedule[name].save()
-                    print(self.schedule[name])
-                    self.session.add(self.schedule[name])
+                    self.schedule[name].save()
                     _tried.add(name)
                 except (KeyError) as exc:
                     logger.error(exc)
@@ -346,7 +350,6 @@ class DatabaseScheduler(Scheduler):
         except Exception as exc:
             logger.exception(exc)
         finally:
-            self.session.commit()
             # retry later, only for the failed ones
             self._dirty |= _failed
 
@@ -387,7 +390,6 @@ class DatabaseScheduler(Scheduler):
 
     @property
     def schedule(self):
-        # self.session = self._create_session()
         initial = update = False
         if self._initial_read:
             debug('DatabaseScheduler: initial read')
@@ -408,7 +410,7 @@ class DatabaseScheduler(Scheduler):
                 debug('Current schedule:\n%s', '\n'.join(
                     repr(entry) for entry in values(self._schedule)),
                 )
-        # self.session.close()
+
         return self._schedule
 
     @property

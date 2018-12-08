@@ -65,7 +65,7 @@ beat_schedule_filename = 'celerybeat-schedule'
 beat_sync_every = 0
 # The maximum number of seconds beat can sleep between checking the schedule.
 # default: 0
-beat_max_loop_interval = 5
+beat_max_loop_interval = 10
 # 自定义配置
 beat_dburi = 'sqlite:///schedule.db'
 
