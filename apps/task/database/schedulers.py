@@ -134,6 +134,14 @@ class ModelEntry(ScheduleEntry):
 
         return self.schedule.is_due(self.last_run_at)
 
+    def _default_now(self):
+        """当前默认时间"""
+        now = self.app.now()
+        # The PyTZ datetime must be localised for the Django-Celery-Beat
+        # scheduler to work. Keep in mind that timezone arithmatic
+        # with a localized timezone may be inaccurate.
+        return now.tzinfo.localize(now.replace(tzinfo=None))
+
     def __next__(self):
         self.model.last_run_at = self.app.now()
         self.model.total_run_count += 1
@@ -197,7 +205,7 @@ class ModelEntry(ScheduleEntry):
             logger.error(exc)
             session.rollback()
 
-        return cls(periodic_task, app=app)
+        return cls(periodic_task, app=app, session=session)
 
     @classmethod
     def _unpack_fields(cls, session, schedule,
@@ -230,7 +238,8 @@ class ModelEntry(ScheduleEntry):
             'queue': queue,
             'exchange': exchange,
             'routing_key': routing_key,
-            'priority': priority
+            'priority': priority,
+            # 'one_off': kwargs.get('one_off') or False
         }
 
     def __repr__(self):
@@ -279,7 +288,6 @@ class DatabaseScheduler(Scheduler):
         debug('DatabaseScheduler: Fetching database schedule')
         # 获取所有使能的 PeriodicTask
         models = self.session.query(self.Model).filter_by(enabled=True).all()
-        # self.session.close()
         s = {}
         for model in models:
             try:
