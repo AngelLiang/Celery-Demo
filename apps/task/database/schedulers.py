@@ -62,6 +62,7 @@ class ModelEntry(ScheduleEntry):
         """Initialize the model entry."""
         self.app = app or current_app._get_current_object()
         self.session = kw.get('session')
+        self.Session = kw.get('Session')
 
         self.name = model.name
         self.task = model.task
@@ -182,7 +183,7 @@ class ModelEntry(ScheduleEntry):
             'Cannot convert schedule type {0!r} to model'.format(schedule))
 
     @classmethod
-    def from_entry(cls, session, name, app=None, **entry):
+    def from_entry(cls, session, name, app=None, Session=None, **entry):
         """从entry加载数据
 
         **entry sample:
@@ -209,7 +210,7 @@ class ModelEntry(ScheduleEntry):
             logger.error(exc)
             session.rollback()
 
-        return cls(periodic_task, app=app, session=session)
+        return cls(periodic_task, app=app, session=session, Session=Session)
 
     @classmethod
     def _unpack_fields(cls, session, schedule,
@@ -269,15 +270,16 @@ class DatabaseScheduler(Scheduler):
         self.app = kwargs['app']
         self.dburi = kwargs.get('dburi') or self.app.conf.get(
             'beat_dburi') or 'sqlite:///schedule.db'
+        self.engine, self.Session = session_manager.create_session(self.dburi)
         self.session = self._create_session()
 
         self._dirty = set()
         Scheduler.__init__(self, *args, **kwargs)
         self._finalize = Finalize(self, self.sync, exitpriority=5)
         self.max_interval = (
-            kwargs.get('max_interval')
-            or self.app.conf.beat_max_loop_interval
-            or DEFAULT_MAX_INTERVAL)
+            kwargs.get('max_interval') or
+            self.app.conf.beat_max_loop_interval or
+            DEFAULT_MAX_INTERVAL)
 
     def _create_session(self):
         return session_manager.session_factory(dburi=self.dburi)
@@ -296,7 +298,7 @@ class DatabaseScheduler(Scheduler):
         for model in models:
             try:
                 s[model.name] = self.Entry(
-                    model, app=self.app, session=self.session)
+                    model, app=self.app, session=self.session, Session=self.Session)
             except ValueError:
                 pass
         return s
@@ -361,7 +363,7 @@ class DatabaseScheduler(Scheduler):
             #  'options': {'expires': 43200}}
             try:
                 entry = self.Entry.from_entry(
-                    self.session, name, app=self.app, **entry_fields)
+                    self.session, name, app=self.app, Session=self.Session, **entry_fields)
                 if entry.model.enabled:
                     s[name] = entry
             except Exception as exc:
