@@ -59,10 +59,10 @@ class ModelEntry(ScheduleEntry):
     # 存储的字段，以下数据库的字段会被本程序修改
     save_fields = ['last_run_at', 'total_run_count', 'no_changes']
 
-    def __init__(self, model, app=None, **kw):
+    def __init__(self, model, Session, app=None, **kw):
         """Initialize the model entry."""
         self.app = app or current_app._get_current_object()
-        self.Session = kw.get('Session')
+        self.Session = Session
 
         self.name = model.name
         self.task = model.task
@@ -121,7 +121,9 @@ class ModelEntry(ScheduleEntry):
 
         # START DATE: only run after the `start_time`, if one exists.
         if self.model.start_time is not None:
-            if maybe_make_aware(self._default_now()) < self.model.start_time:
+            now = maybe_make_aware(self._default_now())
+            start_time = self.model.start_time.replace(tzinfo=self.app.timezone)
+            if now < start_time:
                 # The datetime is before the start date - don't run.
                 _, delay = self.schedule.is_due(self.last_run_at)
                 # use original delay for re-check
@@ -134,7 +136,13 @@ class ModelEntry(ScheduleEntry):
             self.model.total_run_count = 0  # Reset
             self.model.no_changes = False  # Mark the model entry as changed
             # 保存到数据库
-            self.save()
+            ext_fields = ('enabled',)   # 额外保存的字段
+            self.save(ext_fields)
+            # 这里数据库改变数据后，可能会因为没有Ssesion导致进程退出
+            # session = self.Session()
+            # with session_cleanup(session):
+            #     session.add(self.model)
+            #     session.commit()
 
             return schedules.schedstate(False, None)  # Don't recheck
 
@@ -146,16 +154,20 @@ class ModelEntry(ScheduleEntry):
         # The PyTZ datetime must be localised for the Django-Celery-Beat
         # scheduler to work. Keep in mind that timezone arithmatic
         # with a localized timezone may be inaccurate.
-        return now.tzinfo.localize(now.replace(tzinfo=None))
+        # return now.tzinfo.localize(now.replace(tzinfo=None))
+        return now.replace(tzinfo=self.app.timezone)
 
     def __next__(self):
         self.model.last_run_at = self.app.now()
         self.model.total_run_count += 1
         self.model.no_changes = True
-        return self.__class__(self.model)
+        return self.__class__(self.model, Session=self.Session)
     next = __next__  # for 2to3
 
-    def save(self):
+    def save(self, fields=tuple()):
+        """
+        :params fields: tuple, 额外需要保存的字段
+        """
         # TODO:
         session = self.Session()
         with session_cleanup(session):
@@ -165,6 +177,8 @@ class ModelEntry(ScheduleEntry):
             obj = session.query(PeriodicTask).get(self.model.id)
             # 获取需要保存的字段并更新model
             for field in self.save_fields:
+                setattr(obj, field, getattr(self.model, field))
+            for field in fields:
                 setattr(obj, field, getattr(self.model, field))
             session.add(obj)
             session.commit()
@@ -186,7 +200,7 @@ class ModelEntry(ScheduleEntry):
             'Cannot convert schedule type {0!r} to model'.format(schedule))
 
     @classmethod
-    def from_entry(cls, session, name, app=None, Session=None, **entry):
+    def from_entry(cls, name, Session, app=None, **entry):
         """从entry加载数据
 
         **entry sample:
@@ -196,24 +210,26 @@ class ModelEntry(ScheduleEntry):
              'options': {'expires': 43200}}
 
         """
-        periodic_task = session.query(
-            PeriodicTask).filter_by(name=name).first()
-        if not periodic_task:
-            periodic_task = PeriodicTask()
-            periodic_task.name = name
-        temp = cls._unpack_fields(session, **entry)
-        periodic_task.update(**temp)
-        session.add(periodic_task)
-        try:
-            session.commit()
-        except sqlalchemy.exc.IntegrityError as exc:
-            logger.error(exc)
-            session.rollback()
-        except Exception as exc:
-            logger.error(exc)
-            session.rollback()
+        session = Session()
+        with session_cleanup(session):
+            periodic_task = session.query(
+                PeriodicTask).filter_by(name=name).first()
+            if not periodic_task:
+                periodic_task = PeriodicTask()
+                periodic_task.name = name
+            temp = cls._unpack_fields(session, **entry)
+            periodic_task.update(**temp)
+            session.add(periodic_task)
+            try:
+                session.commit()
+            except sqlalchemy.exc.IntegrityError as exc:
+                logger.error(exc)
+                session.rollback()
+            except Exception as exc:
+                logger.error(exc)
+                session.rollback()
 
-        return cls(periodic_task, app=app, session=session, Session=Session)
+        return cls(periodic_task, app=app, Session=Session)
 
     @classmethod
     def _unpack_fields(cls, session, schedule,
@@ -301,8 +317,7 @@ class DatabaseScheduler(Scheduler):
             s = {}
             for model in models:
                 try:
-                    s[model.name] = self.Entry(
-                        model, app=self.app, Session=self.Session)
+                    s[model.name] = self.Entry(model, session=session, Session=self.Session, app=self.app)
                 except ValueError:
                     pass
             return s
@@ -367,8 +382,7 @@ class DatabaseScheduler(Scheduler):
             #  'schedule': <crontab: 0 4 * * * (m/h/d/dM/MY)>,
             #  'options': {'expires': 43200}}
             try:
-                entry = self.Entry.from_entry(
-                    self.session, name, app=self.app, Session=self.Session, **entry_fields)
+                entry = self.Entry.from_entry(name, Session=self.Session, app=self.app, **entry_fields)
                 if entry.model.enabled:
                     s[name] = entry
             except Exception as exc:

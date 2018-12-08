@@ -3,6 +3,7 @@
 import datetime as dt
 
 import sqlalchemy as sa
+from sqlalchemy import event
 from sqlalchemy.orm import relationship
 # from sqlalchemy.types import PickleType
 
@@ -285,3 +286,8 @@ class PeriodicTask(ModelBase, ModelMixin):
         if self.solar:
             return self.solar.schedule
         raise ValueError()
+
+
+@event.listens_for(PeriodicTask, 'after_update')
+def PeriodicTask_receive_after_update(mapper, connection, target):
+    print('{} {} {}'.format(mapper, connection, target))
