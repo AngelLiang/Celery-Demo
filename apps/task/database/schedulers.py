@@ -317,7 +317,7 @@ class DatabaseScheduler(Scheduler):
             s = {}
             for model in models:
                 try:
-                    s[model.name] = self.Entry(model, session=session, Session=self.Session, app=self.app)
+                    s[model.name] = self.Entry(model, Session=self.Session, app=self.app)
                 except ValueError:
                     pass
             return s
@@ -417,6 +417,7 @@ class DatabaseScheduler(Scheduler):
             initial = update = True
             self._initial_read = False
         elif self.schedule_changed():
+            # 更新了 PeriodicTasks model 的 last_update 字段，则会进行更新
             info('DatabaseScheduler: Schedule changed.')
             update = True
 
