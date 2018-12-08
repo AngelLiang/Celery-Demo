@@ -226,13 +226,13 @@ class PeriodicTask(ModelBase, ModelMixin):
         self.task = value
 
     interval_id = sa.Column(sa.ForeignKey(IntervalSchedule.id), nullable=True)
-    interval = relationship('IntervalSchedule', cascade="all, delete")
+    interval = relationship('IntervalSchedule')
 
     crontab_id = sa.Column(sa.ForeignKey(CrontabSchedule.id), nullable=True)
-    crontab = relationship('IntervalSchedule', cascade="all, delete")
+    crontab = relationship('IntervalSchedule')
 
     solar_id = sa.Column(sa.ForeignKey(SolarSchedule.id), nullable=True)
-    solar = relationship('IntervalSchedule', cascade="all, delete")
+    solar = relationship('IntervalSchedule')
 
     # 参数
     args = sa.Column(sa.Text(), default='[]')
