@@ -309,20 +309,16 @@ class DatabaseScheduler(Scheduler):
 
     def schedule_changed(self):
         # TODO:
-        debug('_last_timestamp={}'.format(self._last_timestamp))
-
         session = self.Session()
         with session_cleanup(session):
             changes = session.query(self.Changes).get(1)
-            if changes:
-                last, ts = self._last_timestamp, changes.last_update
-                debug('ts={}'.format(ts))
-            else:
+            if not changes:
                 changes = self.Changes(id=1)
                 session.add(changes)
                 session.commit()
                 return False
 
+            last, ts = self._last_timestamp, changes.last_update
             try:
                 if ts and ts > (last if last else ts):
                     return True
@@ -351,7 +347,7 @@ class DatabaseScheduler(Scheduler):
             while self._dirty:
                 name = self._dirty.pop()
                 try:
-                    self.schedule[name].save()
+                    self.schedule[name].save()  # 保存到数据库
                     _tried.add(name)
                 except (KeyError) as exc:
                     logger.error(exc)
@@ -421,8 +417,7 @@ class DatabaseScheduler(Scheduler):
                 debug('Current schedule:\n%s', '\n'.join(
                     repr(entry) for entry in values(self._schedule)),
                 )
-        debug('initial ={}, update={}'.format(initial, update))
-        debug(self._schedule)
+        # debug(self._schedule)
         return self._schedule
 
     @property
