@@ -3,7 +3,7 @@
 """
 启动Work:
 
-    $ celery worker -A task_app.celery -l info
+    $ celery worker -A task_app:celery -l info
 
     OR
 
@@ -18,7 +18,7 @@
 
 启动定时任务心跳：
 
-    $ celery beat -A task_app.celery -l info
+    $ celery beat -A task_app:celery -l info
 
     OR
 
@@ -38,7 +38,7 @@
 
 """
 
-from apps.task import celery
+from tasks import celery
 
 if __name__ == "__main__":
     celery.start()

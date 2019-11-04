@@ -5,11 +5,15 @@ Celery 示例代码，主要用于学习。
 ## 环境
 
 - Windows 10
-- Pyhton 3
-- Celery 4.1+
+- Python 3.6+
+- Celery 4.2+
 - RabbitMQ
 
 > 注意：Celery 4.0 不支持 Windows。Celery 4.1 开始支持。
+>
+> 注意：Celery 4.1 不支持 Python 3.6+，因为`async`变成了关键字。
+>
+> 因此建议最佳版本组合是：Celery 4.2+ 和 Python 3.6+
 
 ## 快速开始
 
@@ -44,6 +48,8 @@ $ $env:FORKED_BY_MULTIPROCESSING
 最后启动 celery：
 
 ```PowerShell
+celery worker -A task_app.celery -l info
+# OR
 python task_app.py worker -l info
 ```
 

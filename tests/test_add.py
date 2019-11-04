@@ -3,7 +3,7 @@
 from pytest import raises
 from unittest.mock import patch
 
-from apps.task.tasks import add
+from tasks.tasks import add
 
 
 def test_add_task():

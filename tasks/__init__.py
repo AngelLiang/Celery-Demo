@@ -14,7 +14,7 @@ sys.path.insert(0, BASEDIR)
 
 from celery import Celery
 # settings
-from apps.task.settings import config_dict
+from tasks.settings import config_dict
 
 
 celery = Celery(__name__)
