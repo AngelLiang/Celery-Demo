@@ -2,6 +2,7 @@
 
 import os
 from datetime import timedelta
+from collections import UserDict
 
 from kombu import Exchange, Queue
 from kombu.common import Broadcast
@@ -88,7 +89,27 @@ accept_content = ['json']
 # 默认每个worker跑完10个任务后，自我销毁程序重建来释放内存
 worker_max_tasks_per_child = 10
 
-config_dict = dict(
+
+# class Config(UserDict):
+#     # task_default_queue=task_default_queue
+#     # tasks_queues=tasks_queues
+#     # task_routes=task_routes
+
+#     timezone = timezone
+#     # beat_schedule=beat_schedule
+#     beat_max_loop_interval = beat_max_loop_interval
+#     beat_dburi = beat_dburi
+
+#     broker = broker_url
+#     result_backend = result_backend
+#     result_persistent = result_persistent
+
+#     worker_max_tasks_per_child = worker_max_tasks_per_child
+
+
+# config = Config()
+
+config = dict(
     # task_default_queue=task_default_queue,
     # tasks_queues=tasks_queues,
     # task_routes=task_routes,

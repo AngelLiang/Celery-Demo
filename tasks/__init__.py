@@ -1,8 +1,7 @@
 # coding=utf-8
-# flake8: noqa
 """
-Run:
-    celery worker -A apps.task.celery --loglevel=info
+Run::
+    celery worker -A tasks:celery --loglevel=info
 """
 
 import os
@@ -14,10 +13,11 @@ sys.path.insert(0, BASEDIR)
 
 from celery import Celery
 # settings
-from tasks.settings import config_dict
+from tasks.settings import config
 
 
 celery = Celery(__name__)
-celery.conf.update(config_dict)
+celery.conf.update(config)
+print(celery.conf)
 
-from . import tasks
+from . import tasks  # noqa
